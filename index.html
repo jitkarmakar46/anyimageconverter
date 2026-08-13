@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AnyImageConverter — Photo Tools Suite</title>
+  <meta name="description" content="Convert photos to PDF, compress images, and change image formats — all in your browser. Free, fast, and private.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AnyImageConverter — Photo Tools Suite">
+  <meta property="og:description" content="Convert photos to PDF, compress images, and change image formats — all in your browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+  <script>
+    // Fallback if CDN fails
+    if (typeof window.jspdf === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js';
+      document.head.appendChild(s);
+    }
+  </script>
+  <script>
+    // Initialize theme synchronously to match system preference
+    (function() {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <!-- Dotted Animation Canvas (Antigravity-style) -->
+  <canvas id="dot-canvas"></canvas>
+
+  <!-- Header -->
+  <header class="header" id="main-header">
+    <div class="header-inner">
+      <a href="/" class="logo-link" aria-label="AnyImageConverter Home">
+        <img src="logo.jpg" alt="AnyImageConverter Logo" class="logo-icon" width="32" height="32" style="border-radius: 6px; object-fit: cover; display: block;">
+        <span class="logo-text">AnyImageConverter</span>
+      </a>
+      <nav class="header-nav" aria-label="Main navigation">
+        <a href="#tools" class="nav-link" data-nav="tools">Tools</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg class="theme-icon sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="theme-icon moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero" id="hero">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        <span>100% Browser-Based · No Uploads</span>
+      </div>
+      <h1 class="hero-title typing-target">
+        <span class="title-line">Transform your</span>
+        <span class="title-line title-gradient">images instantly.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Convert photos to PDF, compress to save space, and change formats — all processed locally in your browser. Your files never leave your device.
+      </p>
+      <div class="hero-actions">
+        <a href="#tools" class="btn btn-primary">
+          <span class="btn-text">Get Started</span>
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools Section -->
+  <section class="tools-section" id="tools">
+    <div class="section-container">
+      <div class="section-header">
+        <span class="section-label">Tools</span>
+        <h2 class="section-title typing-target">
+          <span class="title-line">Everything you need,</span>
+          <span class="title-line">right in your browser.</span>
+        </h2>
+      </div>
+
+      <!-- Tool Tabs -->
+      <div class="tool-tabs" role="tablist">
+        <div class="tab-indicator" id="tab-indicator"></div>
+        <button class="tool-tab active" role="tab" data-tool="pdf" id="tab-pdf" aria-selected="true" aria-controls="panel-pdf">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Photos to PDF</span>
+        </button>
+        <button class="tool-tab" role="tab" data-tool="compress" id="tab-compress" aria-selected="false" aria-controls="panel-compress">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Compress Images</span>
+        </button>
+        <button class="tool-tab" role="tab" data-tool="convert" id="tab-convert" aria-selected="false" aria-controls="panel-convert">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <span>Convert Format</span>
+        </button>
+      </div>
+
+      <!-- Tool Panels -->
+      <div class="tool-panels">
+
+        <!-- PDF Panel -->
+        <div class="tool-panel active" id="panel-pdf" role="tabpanel" aria-labelledby="tab-pdf">
+          <div class="panel-grid">
+            <div class="panel-main">
+              <div class="drop-zone" id="pdf-drop-zone" tabindex="0" role="button" aria-label="Drop images here or click to browse">
+                <div class="drop-zone-content">
+                  <div class="drop-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  </div>
+                  <p class="drop-title">Drop your images here</p>
+                  <p class="drop-subtitle">or click to browse · JPG, PNG, WebP, BMP, GIF, TIFF, AVIF, SVG</p>
+                </div>
+                <input type="file" id="pdf-file-input" multiple accept="image/*" hidden>
+              </div>
+              <div class="file-list" id="pdf-file-list"></div>
+              <button class="btn btn-primary btn-full action-btn-main" id="pdf-generate-btn" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Generate PDF</span>
+              </button>
+            </div>
+            <div class="panel-sidebar">
+              <h3 class="sidebar-title">PDF Settings</h3>
+              <div class="setting-group">
+                <label class="setting-label" for="pdf-page-size">Page Size</label>
+                <select class="setting-select" id="pdf-page-size">
+                  <option value="a4">A4 (210 × 297 mm)</option>
+                  <option value="letter">Letter (8.5 × 11 in)</option>
+                  <option value="legal">Legal (8.5 × 14 in)</option>
+                  <option value="fit">Fit to Image</option>
+                </select>
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="pdf-orientation">Orientation</label>
+                <select class="setting-select" id="pdf-orientation">
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                  <option value="auto">Auto (match image)</option>
+                </select>
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="pdf-margin">Margin</label>
+                <div class="range-control">
+                  <input type="range" id="pdf-margin" min="0" max="40" value="10" class="setting-range">
+                  <span class="range-value" id="pdf-margin-value">10mm</span>
+                </div>
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="pdf-quality">Image Quality</label>
+                <div class="range-control">
+                  <input type="range" id="pdf-quality" min="10" max="100" value="85" class="setting-range">
+                  <span class="range-value" id="pdf-quality-value">85%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compress Panel -->
+        <div class="tool-panel" id="panel-compress" role="tabpanel" aria-labelledby="tab-compress">
+          <div class="panel-grid">
+            <div class="panel-main">
+              <div class="drop-zone" id="compress-drop-zone" tabindex="0" role="button" aria-label="Drop images to compress">
+                <div class="drop-zone-content">
+                  <div class="drop-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  </div>
+                  <p class="drop-title">Drop images to compress</p>
+                  <p class="drop-subtitle">or click to browse · All common formats supported</p>
+                </div>
+                <input type="file" id="compress-file-input" multiple accept="image/*" hidden>
+              </div>
+              <div class="file-list" id="compress-file-list"></div>
+              <button class="btn btn-primary btn-full action-btn-main" id="compress-btn" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Compress & Download</span>
+              </button>
+            </div>
+            <div class="panel-sidebar">
+              <h3 class="sidebar-title">Compression Settings</h3>
+              <div class="setting-group">
+                <label class="setting-label" for="compress-quality">Quality</label>
+                <div class="range-control">
+                  <input type="range" id="compress-quality" min="5" max="100" value="70" class="setting-range">
+                  <span class="range-value" id="compress-quality-value">70%</span>
+                </div>
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="compress-max-width">Max Width (px)</label>
+                <input type="number" class="setting-input" id="compress-max-width" value="1920" min="100" max="8000">
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="compress-max-height">Max Height (px)</label>
+                <input type="number" class="setting-input" id="compress-max-height" value="1080" min="100" max="8000">
+              </div>
+              <div class="setting-group">
+                <label class="setting-label" for="compress-output-format">Output Format</label>
+                <select class="setting-select" id="compress-output-format">
+                  <option value="jpeg">JPEG</option>
+                  <option value="png">PNG</option>
+                  <option value="webp" selected>WebP (Best)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Convert Panel -->
+        <div class="tool-panel" id="panel-convert" role="tabpanel" aria-labelledby="tab-convert">
+          <div class="panel-grid">
+            <div class="panel-main">
+              <div class="drop-zone" id="convert-drop-zone" tabindex="0" role="button" aria-label="Drop images to convert">
+                <div class="drop-zone-content">
+                  <div class="drop-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  </div>
+                  <p class="drop-title">Drop images to convert</p>
+                  <p class="drop-subtitle">or click to browse · Convert between any format</p>
+                </div>
+                <input type="file" id="convert-file-input" multiple accept="image/*" hidden>
+              </div>
+              <div class="file-list" id="convert-file-list"></div>
+              <button class="btn btn-primary btn-full action-btn-main" id="convert-btn" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
+                <span>Convert & Download</span>
+              </button>
+            </div>
+            <div class="panel-sidebar">
+              <h3 class="sidebar-title">Format Conversion</h3>
+              <div class="format-grid">
+                <button class="format-btn active" data-format="jpeg">JPEG</button>
+                <button class="format-btn" data-format="png">PNG</button>
+                <button class="format-btn" data-format="webp">WebP</button>
+                <button class="format-btn" data-format="bmp">BMP</button>
+                <button class="format-btn" data-format="gif">GIF</button>
+                <button class="format-btn" data-format="tiff">TIFF</button>
+                <button class="format-btn" data-format="avif">AVIF</button>
+                <button class="format-btn" data-format="ico">ICO</button>
+                <button class="format-btn" data-format="svg">SVG</button>
+              </div>
+              <div class="setting-group" id="convert-quality-group">
+                <label class="setting-label" for="convert-quality">Quality</label>
+                <div class="range-control">
+                  <input type="range" id="convert-quality" min="5" max="100" value="90" class="setting-range">
+                  <span class="range-value" id="convert-quality-value">90%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="/" class="logo-link footer-logo-link" aria-label="AnyImageConverter Home">
+          <img src="logo.jpg" alt="AnyImageConverter Logo" class="logo-icon" width="24" height="24" style="border-radius: 4px; object-fit: cover; display: block;">
+          <span class="logo-text">AnyImageConverter</span>
+        </a>
+      </div>
+      
+      <div class="footer-about minimal-about">
+        <div class="about-info">
+          <span class="about-name">Jit Karmakar</span>
+          <span class="about-separator">|</span>
+          <span class="about-role">Web Developer</span>
+        </div>
+        
+        <div class="social-links minimal-social">
+          <a href="mailto:jitkarmakar46@gmail.com" aria-label="Email">
+            <img src="gmail-logo.png" alt="Gmail" width="24" height="24" style="display: block; object-fit: contain;">
+          </a>
+
+          <a href="https://www.instagram.com/jit_karmakar46?igsh=bXFiY20xbGh2bnJk" target="_blank" rel="noopener" aria-label="Instagram">
+            <img src="instagram-logo.png" alt="Instagram" width="24" height="24" style="display: block; object-fit: contain;">
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-copy">© 2026 AnyImageConverter.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Admin Login Gate (hidden by default) -->
+  <div class="admin-login-overlay" id="admin-login-overlay" hidden>
+    <div class="admin-login-card">
+      <button class="admin-login-close" id="admin-login-close" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="admin-login-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 class="admin-login-title">Admin Access</h2>
+      <p class="admin-login-subtitle">Enter your password to continue</p>
+      <form id="admin-login-form" autocomplete="off">
+        <div class="admin-input-wrap">
+          <input type="password" id="admin-password-input" class="admin-input" placeholder="Password" autocomplete="new-password" required>
+          <button type="button" class="admin-input-toggle" id="admin-pw-toggle" aria-label="Show password">
+            <svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <p class="admin-login-error" id="admin-login-error" hidden>Incorrect password</p>
+        <button type="submit" class="btn btn-primary btn-full admin-login-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Unlock Dashboard</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Panel (hidden by default) -->
+  <div class="admin-panel" id="admin-panel" hidden>
+    <div class="admin-panel-inner">
+      <!-- Admin Header -->
+      <div class="admin-header">
+        <div class="admin-header-left">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h1 class="admin-title">Admin Dashboard</h1>
+          <span class="admin-badge-live">Owner</span>
+        </div>
+        <div class="admin-header-right">
+          <button class="btn btn-ghost admin-clear-btn" id="admin-clear-data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Clear Data</span>
+          </button>
+          <button class="btn btn-ghost admin-export-btn" id="admin-export-data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export</span>
+          </button>
+          <button class="admin-close-btn" id="admin-close" aria-label="Close admin panel">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="admin-stats-grid">
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #3186FF">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-visits">0</span>
+            <span class="admin-stat-label">Page Visits</span>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #7B61FF">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-pdfs">0</span>
+            <span class="admin-stat-label">PDFs Generated</span>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #00B95C">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-compressed">0</span>
+            <span class="admin-stat-label">Images Compressed</span>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #FF6B6B">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-converted">0</span>
+            <span class="admin-stat-label">Format Conversions</span>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #FBBC04">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-total-files">0</span>
+            <span class="admin-stat-label">Total Files Processed</span>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="--stat-color: #E91E8C">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="admin-stat-info">
+            <span class="admin-stat-value" id="stat-last-active">—</span>
+            <span class="admin-stat-label">Last Activity</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2 class="admin-section-title">Activity Log</h2>
+          <div class="admin-filters">
+            <button class="admin-filter active" data-filter="all">All</button>
+            <button class="admin-filter" data-filter="pdf">PDF</button>
+            <button class="admin-filter" data-filter="compress">Compress</button>
+            <button class="admin-filter" data-filter="convert">Convert</button>
+            <button class="admin-filter" data-filter="visit">Visits</button>
+          </div>
+        </div>
+        <div class="admin-log-table-wrap">
+          <table class="admin-log-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Details</th>
+                <th>Files</th>
+              </tr>
+            </thead>
+            <tbody id="admin-log-body">
+              <tr class="admin-log-empty"><td colspan="4">No activity recorded yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- File Details Log -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2 class="admin-section-title">File Details</h2>
+          <span class="admin-section-note">Metadata only — actual files stay on user's device</span>
+        </div>
+        <div class="admin-log-table-wrap">
+          <table class="admin-log-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>File Name</th>
+                <th>Original Size</th>
+                <th>Type</th>
+                <th>Tool Used</th>
+              </tr>
+            </thead>
+            <tbody id="admin-files-body">
+              <tr class="admin-log-empty"><td colspan="5">No files processed yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Progress Overlay -->
+  <div class="progress-overlay" id="progress-overlay" hidden>
+    <div class="progress-modal">
+      <div class="progress-spinner"></div>
+      <p class="progress-text" id="progress-text">Processing...</p>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progress-bar"></div>
+      </div>
+      <p class="progress-detail" id="progress-detail"></p>
+    </div>
+  </div>
+
+  <!-- Upload Overlay (Scissor Animation) -->
+  <div class="upload-overlay" id="upload-overlay">
+    <div class="upload-popup">
+      <div class="cutting-animation">
+        <svg class="paper-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 2v20h16V8l-6-6H4z"/>
+          <line x1="12" y1="22" x2="12" y2="2" stroke-dasharray="2 4" stroke="currentColor" opacity="0.3" />
+        </svg>
+        <svg class="scissor-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <g class="blade-1">
+            <circle cx="6" cy="18" r="3"/>
+            <line x1="8.12" y1="15.88" x2="20" y2="4"/>
+          </g>
+          <g class="blade-2">
+            <circle cx="6" cy="6" r="3"/>
+            <line x1="8.12" y1="8.12" x2="20" y2="20"/>
+          </g>
+          <circle cx="12" cy="12" r="1.5" fill="var(--bg-color)" stroke="none"/>
+        </svg>
+      </div>
+      <div class="upload-text">Processing files...</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
