@@ -1,5 +1,5 @@
 /* =============================================
-   PixelForge — Application Logic
+   Application Logic
    Photo to PDF · Compress · Format Convert
    + Antigravity Dotted Animation + Dark Mode
    ============================================= */
@@ -454,12 +454,17 @@
               const blobArr = Array.isArray(blob) ? blob : [blob];
               file = new File([blobArr[0]], file.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' });
             } else {
-              console.warn('heic2any not loaded');
+              throw new Error('heic2any not loaded');
             }
           } catch (e) {
             console.error('HEIC conversion error:', e);
+            throw new Error('Failed to convert HEIC image');
           }
         }
+        
+        // Strict validation: attempt to load the image into memory immediately.
+        // If it's a corrupted file or an unsupported format, this will cleanly reject it.
+        await loadImage(file);
         
         const thumb = await createThumbnail(file);
         state[toolKey].files.push({
@@ -471,7 +476,7 @@
         });
       } catch (err) {
         console.error('Error adding file:', err);
-        showToast(`❌ Could not load ${f.name}`);
+        showToast(`❌ Could not load ${f.name} - Unsupported or corrupted file.`);
       }
     }
     
@@ -771,8 +776,6 @@
       pdf.save(outName);
       showProgress(false);
       showToast(`✅ PDF created with ${files.length} page${files.length > 1 ? 's' : ''}!`);
-      // Track in admin analytics
-      if (window.PFAdmin) window.PFAdmin.trackPDF(files);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error generating PDF: ' + err.message);
@@ -856,8 +859,6 @@
       showProgress(false);
       const savedPercent = Math.round((1 - totalCompressed / totalOriginal) * 100);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} compressed! Saved ${savedPercent}% size`);
-      // Track in admin analytics
-      if (window.PFAdmin) window.PFAdmin.trackCompress(files, savedPercent);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error compressing: ' + err.message);
@@ -968,8 +969,6 @@
 
       showProgress(false);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} converted to ${targetFormat.toUpperCase()}`);
-      // Track in admin analytics
-      if (window.PFAdmin) window.PFAdmin.trackConvert(files, targetFormat);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error converting: ' + err.message);
@@ -1139,476 +1138,5 @@
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
-  }
-})();
-/* =============================================
-   PixelForge — Admin Panel
-   Secret dashboard for the site owner only.
-   Access: Ctrl+Shift+A or URL #admin
-   ============================================= */
-
-(function () {
-  'use strict';
-
-  // ═══════════════════════════════════════════
-  // ADMIN ACCESS
-  // ═══════════════════════════════════════════
-  const _PK = '8f6e6e5a46f067810717eae70248445901be5156f13386bdbc0d258f4f1aeff3';
-
-  async function _verify(input) {
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(input);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      return hashHex === _PK;
-    } catch {
-      return false;
-    }
-  }
-
-  // ═══════════════════════════════════════════
-  // ANALYTICS STORAGE
-  // ═══════════════════════════════════════════
-  const STORAGE_KEY = 'pf_analytics';
-
-  function getAnalytics() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createEmptyAnalytics();
-      return JSON.parse(raw);
-    } catch {
-      return createEmptyAnalytics();
-    }
-  }
-
-  function saveAnalytics(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {
-      console.warn('Analytics storage full:', e);
-    }
-  }
-
-  function createEmptyAnalytics() {
-    return {
-      visits: 0,
-      pdfsGenerated: 0,
-      imagesCompressed: 0,
-      imagesConverted: 0,
-      totalFilesProcessed: 0,
-      activityLog: [],
-      fileLog: [],
-    };
-  }
-
-  // ═══════════════════════════════════════════
-  // PUBLIC API — called from app.js
-  // ═══════════════════════════════════════════
-
-  // Track a page visit
-  function trackVisit() {
-    const data = getAnalytics();
-    data.visits++;
-    data.activityLog.unshift({
-      type: 'visit',
-      time: new Date().toISOString(),
-      action: 'Page Visit',
-      details: `${navigator.userAgent.split(') ')[0]})`,
-      fileCount: 0,
-    });
-    // Keep log under 500 entries
-    if (data.activityLog.length > 500) data.activityLog.length = 500;
-    saveAnalytics(data);
-  }
-
-  // Track PDF generation
-  function trackPDF(files) {
-    const data = getAnalytics();
-    data.pdfsGenerated++;
-    data.totalFilesProcessed += files.length;
-
-    data.activityLog.unshift({
-      type: 'pdf',
-      time: new Date().toISOString(),
-      action: 'PDF Generated',
-      details: `${files.length} image${files.length > 1 ? 's' : ''} → 1 PDF`,
-      fileCount: files.length,
-    });
-
-    for (const f of files) {
-      data.fileLog.unshift({
-        time: new Date().toISOString(),
-        name: f.name,
-        size: f.size,
-        type: f.file ? f.file.type : 'image/*',
-        tool: 'PDF',
-      });
-    }
-
-    if (data.activityLog.length > 500) data.activityLog.length = 500;
-    if (data.fileLog.length > 1000) data.fileLog.length = 1000;
-    saveAnalytics(data);
-  }
-
-  // Track image compression
-  function trackCompress(files, savedPercent) {
-    const data = getAnalytics();
-    data.imagesCompressed += files.length;
-    data.totalFilesProcessed += files.length;
-
-    data.activityLog.unshift({
-      type: 'compress',
-      time: new Date().toISOString(),
-      action: 'Images Compressed',
-      details: `${files.length} file${files.length > 1 ? 's' : ''}, saved ${savedPercent}%`,
-      fileCount: files.length,
-    });
-
-    for (const f of files) {
-      data.fileLog.unshift({
-        time: new Date().toISOString(),
-        name: f.name,
-        size: f.size,
-        type: f.file ? f.file.type : 'image/*',
-        tool: 'Compress',
-      });
-    }
-
-    if (data.activityLog.length > 500) data.activityLog.length = 500;
-    if (data.fileLog.length > 1000) data.fileLog.length = 1000;
-    saveAnalytics(data);
-  }
-
-  // Track format conversion
-  function trackConvert(files, targetFormat) {
-    const data = getAnalytics();
-    data.imagesConverted += files.length;
-    data.totalFilesProcessed += files.length;
-
-    data.activityLog.unshift({
-      type: 'convert',
-      time: new Date().toISOString(),
-      action: 'Format Converted',
-      details: `${files.length} file${files.length > 1 ? 's' : ''} → ${targetFormat.toUpperCase()}`,
-      fileCount: files.length,
-    });
-
-    for (const f of files) {
-      data.fileLog.unshift({
-        time: new Date().toISOString(),
-        name: f.name,
-        size: f.size,
-        type: f.file ? f.file.type : 'image/*',
-        tool: 'Convert → ' + targetFormat.toUpperCase(),
-      });
-    }
-
-    if (data.activityLog.length > 500) data.activityLog.length = 500;
-    if (data.fileLog.length > 1000) data.fileLog.length = 1000;
-    saveAnalytics(data);
-  }
-
-  // Expose tracking functions globally for app.js to call
-  window.PFAdmin = {
-    trackVisit,
-    trackPDF,
-    trackCompress,
-    trackConvert,
-  };
-
-  // ═══════════════════════════════════════════
-  // ADMIN UI
-  // ═══════════════════════════════════════════
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => document.querySelectorAll(sel);
-
-  let adminUnlocked = false;
-  let currentFilter = 'all';
-
-  function formatSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function formatTime(isoStr) {
-    try {
-      const d = new Date(isoStr);
-      const now = new Date();
-      const diffMs = now - d;
-      const diffMin = Math.floor(diffMs / 60000);
-      const diffHr = Math.floor(diffMs / 3600000);
-      const diffDay = Math.floor(diffMs / 86400000);
-
-      if (diffMin < 1) return 'Just now';
-      if (diffMin < 60) return `${diffMin}m ago`;
-      if (diffHr < 24) return `${diffHr}h ago`;
-      if (diffDay < 7) return `${diffDay}d ago`;
-
-      return d.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return isoStr;
-    }
-  }
-
-  function getActionBadgeClass(type) {
-    const map = {
-      visit: 'badge-blue',
-      pdf: 'badge-purple',
-      compress: 'badge-green',
-      convert: 'badge-coral',
-    };
-    return map[type] || 'badge-blue';
-  }
-
-  // Show login gate
-  function showLogin() {
-    const overlay = $('#admin-login-overlay');
-    if (overlay) {
-      overlay.hidden = false;
-      setTimeout(() => {
-        const input = $('#admin-password-input');
-        if (input) input.focus();
-      }, 100);
-    }
-  }
-
-  function hideLogin() {
-    const overlay = $('#admin-login-overlay');
-    if (overlay) overlay.hidden = true;
-    const err = $('#admin-login-error');
-    if (err) err.hidden = true;
-    const input = $('#admin-password-input');
-    if (input) input.value = '';
-  }
-
-  // Show admin panel
-  function showAdmin() {
-    adminUnlocked = true;
-    hideLogin();
-    const panel = $('#admin-panel');
-    if (panel) panel.hidden = false;
-    document.body.style.overflow = 'hidden';
-    refreshDashboard();
-  }
-
-  function hideAdmin() {
-    const panel = $('#admin-panel');
-    if (panel) panel.hidden = true;
-    document.body.style.overflow = '';
-    adminUnlocked = false;
-  }
-
-  // Refresh dashboard data
-  function refreshDashboard() {
-    const data = getAnalytics();
-
-    // Update stat cards
-    const statVisits = $('#stat-visits');
-    const statPdfs = $('#stat-pdfs');
-    const statCompressed = $('#stat-compressed');
-    const statConverted = $('#stat-converted');
-    const statTotalFiles = $('#stat-total-files');
-    const statLastActive = $('#stat-last-active');
-
-    if (statVisits) statVisits.textContent = data.visits.toLocaleString();
-    if (statPdfs) statPdfs.textContent = data.pdfsGenerated.toLocaleString();
-    if (statCompressed) statCompressed.textContent = data.imagesCompressed.toLocaleString();
-    if (statConverted) statConverted.textContent = data.imagesConverted.toLocaleString();
-    if (statTotalFiles) statTotalFiles.textContent = data.totalFilesProcessed.toLocaleString();
-
-    if (statLastActive) {
-      if (data.activityLog.length > 0) {
-        statLastActive.textContent = formatTime(data.activityLog[0].time);
-      } else {
-        statLastActive.textContent = '—';
-      }
-    }
-
-    // Render activity log
-    renderActivityLog(data);
-
-    // Render file log
-    renderFileLog(data);
-  }
-
-  function renderActivityLog(data) {
-    const tbody = $('#admin-log-body');
-    if (!tbody) return;
-
-    const filtered = currentFilter === 'all'
-      ? data.activityLog
-      : data.activityLog.filter((e) => e.type === currentFilter);
-
-    if (filtered.length === 0) {
-      tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="4">No activity recorded yet</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = filtered.slice(0, 100).map((entry) => `
-      <tr>
-        <td class="log-time">${formatTime(entry.time)}</td>
-        <td><span class="log-badge ${getActionBadgeClass(entry.type)}">${entry.action}</span></td>
-        <td class="log-details">${entry.details}</td>
-        <td class="log-files">${entry.fileCount > 0 ? entry.fileCount : '—'}</td>
-      </tr>
-    `).join('');
-  }
-
-  function renderFileLog(data) {
-    const tbody = $('#admin-files-body');
-    if (!tbody) return;
-
-    if (data.fileLog.length === 0) {
-      tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="5">No files processed yet</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = data.fileLog.slice(0, 100).map((f) => `
-      <tr>
-        <td class="log-time">${formatTime(f.time)}</td>
-        <td class="log-filename">${escapeHtml(f.name)}</td>
-        <td>${formatSize(f.size)}</td>
-        <td><code>${f.type}</code></td>
-        <td><span class="log-badge badge-blue">${f.tool}</span></td>
-      </tr>
-    `).join('');
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  // ═══════════════════════════════════════════
-  // EVENT BINDINGS
-  // ═══════════════════════════════════════════
-  function initAdmin() {
-    // Secret keyboard shortcut: Ctrl+Shift+A
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-        e.preventDefault();
-        if (adminUnlocked) {
-          hideAdmin();
-        } else {
-          showLogin();
-        }
-      }
-      // Escape to close
-      if (e.key === 'Escape') {
-        if (adminUnlocked) hideAdmin();
-        else hideLogin();
-      }
-    });
-
-    // URL hash check
-    if (window.location.hash === '#admin') {
-      showLogin();
-      // Remove hash so it's not visible
-      history.replaceState(null, '', window.location.pathname);
-    }
-
-    // Login form
-    const form = $('#admin-login-form');
-    if (form) {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = $('#admin-password-input');
-        const err = $('#admin-login-error');
-        if (!input) return;
-
-        const isValid = await _verify(input.value);
-        if (isValid) {
-          showAdmin();
-        } else {
-          if (err) {
-            err.hidden = false;
-            err.classList.add('shake');
-            setTimeout(() => err.classList.remove('shake'), 500);
-          }
-          input.value = '';
-          input.focus();
-        }
-      });
-    }
-
-    // Password visibility toggle
-    const pwToggle = $('#admin-pw-toggle');
-    if (pwToggle) {
-      pwToggle.addEventListener('click', () => {
-        const input = $('#admin-password-input');
-        if (!input) return;
-        const isPassword = input.type === 'password';
-        input.type = isPassword ? 'text' : 'password';
-        pwToggle.querySelector('.eye-open').style.display = isPassword ? 'none' : 'block';
-        pwToggle.querySelector('.eye-closed').style.display = isPassword ? 'block' : 'none';
-      });
-    }
-
-    // Close buttons
-    const loginClose = $('#admin-login-close');
-    if (loginClose) loginClose.addEventListener('click', hideLogin);
-
-    const adminClose = $('#admin-close');
-    if (adminClose) adminClose.addEventListener('click', hideAdmin);
-
-    // Clear data
-    const clearBtn = $('#admin-clear-data');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        if (confirm('Clear ALL analytics data? This cannot be undone.')) {
-          localStorage.removeItem(STORAGE_KEY);
-          refreshDashboard();
-        }
-      });
-    }
-
-    // Export data
-    const exportBtn = $('#admin-export-data');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        const data = getAnalytics();
-        const json = JSON.stringify(data, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `anyimageconverter-analytics-${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      });
-    }
-
-    // Filter buttons
-    $$('.admin-filter').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        $$('.admin-filter').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        refreshDashboard();
-      });
-    });
-
-    // Track this page visit
-    trackVisit();
-  }
-
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAdmin);
-  } else {
-    initAdmin();
   }
 })();
