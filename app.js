@@ -274,15 +274,15 @@
 
   function loadImage(file) {
     return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
       const img = new Image();
+      const url = URL.createObjectURL(file);
       img.onload = () => {
-        URL.revokeObjectURL(url); // Free memory once loaded
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
         resolve(img);
       };
       img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Failed to load image: ' + file.name));
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        reject(new Error("Failed to load image: " + file.name));
       };
       img.src = url;
     });
@@ -771,12 +771,16 @@
       showProgress(true, 'Saving PDF...', 'Almost done', 95);
       await new Promise((r) => setTimeout(r, 100));
 
+      const pdfBlob = pdf.output('blob');
+      const newSize = pdfBlob.size;
+      const originalSize = files.reduce((acc, f) => acc + f.size, 0);
+      
       const baseName = files[0].name.replace(/\.[^.]+$/, '');
       const outName = `${baseName}_pdf_${Date.now()}.pdf`;
       pdf.save(outName);
       showProgress(false);
       showToast(`✅ PDF created with ${files.length} page${files.length > 1 ? 's' : ''}!`);
-      if (window.PFAdmin) window.PFAdmin.trackPDF(files);
+      if (window.PFAdmin) window.PFAdmin.trackPDF(files, originalSize, newSize);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error generating PDF: ' + err.message);
@@ -800,7 +804,7 @@
     try {
       let totalOriginal = 0;
       let totalCompressed = 0;
-      let zip = null;
+      let totalOriginal = 0; let totalConverted = 0; let zip = null;
       if (files.length > 1 && window.JSZip) {
         zip = new JSZip();
       }
@@ -860,7 +864,7 @@
       showProgress(false);
       const savedPercent = Math.round((1 - totalCompressed / totalOriginal) * 100);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} compressed! Saved ${savedPercent}% size`);
-      if (window.PFAdmin) window.PFAdmin.trackCompress(files, savedPercent);
+      if (window.PFAdmin) window.PFAdmin.trackCompress(files, savedPercent, totalOriginal, totalCompressed);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error compressing: ' + err.message);
@@ -880,7 +884,7 @@
     showProgress(true, 'Converting images...', `0 / ${files.length}`, 0);
 
     try {
-      let zip = null;
+      let totalOriginal = 0; let totalConverted = 0; let zip = null;
       if (files.length > 1 && window.JSZip) {
         zip = new JSZip();
       }
@@ -906,6 +910,7 @@
           const blob = new Blob([svg], { type: 'image/svg+xml' });
           const baseName = item.name.replace(/\.[^.]+$/, '');
           const outName = `${baseName}.svg`;
+          totalOriginal += item.size; totalConverted += blob.size;
           if (zip) zip.file(outName, blob);
           else downloadBlob(blob, outName);
         } else if (targetFormat === 'ico') {
@@ -918,6 +923,7 @@
           const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
           const baseName = item.name.replace(/\.[^.]+$/, '');
           const outName = `${baseName}.ico`;
+          totalOriginal += item.size; totalConverted += blob.size;
           if (zip) zip.file(outName, blob);
           else downloadBlob(blob, outName);
         } else if (targetFormat === 'tiff') {
@@ -930,6 +936,7 @@
           const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
           const baseName = item.name.replace(/\.[^.]+$/, '');
           const outName = `${baseName}.tiff`;
+          totalOriginal += item.size; totalConverted += blob.size;
           if (zip) zip.file(outName, blob);
           else downloadBlob(blob, outName);
         } else {
@@ -955,6 +962,7 @@
           const baseName = item.name.replace(/\.[^.]+$/, '');
           const ext = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
           const outName = `${baseName}.${ext}`;
+          totalOriginal += item.size; totalConverted += blob.size;
           if (zip) zip.file(outName, blob);
           else downloadBlob(blob, outName);
         }
@@ -971,7 +979,7 @@
 
       showProgress(false);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} converted to ${targetFormat.toUpperCase()}`);
-      if (window.PFAdmin) window.PFAdmin.trackConvert(files, targetFormat);
+      if (window.PFAdmin) window.PFAdmin.trackConvert(files, targetFormat, totalOriginal, totalConverted);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error converting: ' + err.message);
@@ -1215,7 +1223,7 @@
     }
   }
 
-  async function pushLog(action, details) {
+  async function pushLog(action, details, fileInfo = null) {
     if (!db) return;
     try {
       const device = getDeviceMetadata();
@@ -1225,7 +1233,10 @@
         os: device.os,
         browser: device.browser,
         type: device.type,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        originalSize: fileInfo ? fileInfo.originalSize : null,
+        newSize: fileInfo ? fileInfo.newSize : null,
+        toolUsed: fileInfo ? fileInfo.toolUsed : null
       });
     } catch (e) {
       console.error("Log push failed:", e);
@@ -1240,20 +1251,20 @@
       incrementStat('visits');
       pushLog('visit', 'Page loaded');
     },
-    trackPDF: (files) => {
+    trackPDF: (files, oSize, nSize) => {
       incrementStat('pdfsGenerated');
       incrementStat('totalFilesProcessed', files.length);
-      pushLog('pdf', `Generated PDF from ${files.length} images`);
+      pushLog('pdf', `Generated PDF from ${files.length} images`, { originalSize: oSize, newSize: nSize, toolUsed: 'PDF Generator' });
     },
-    trackCompress: (files, savedPercent) => {
+    trackCompress: (files, savedPercent, oSize, nSize) => {
       incrementStat('imagesCompressed', files.length);
       incrementStat('totalFilesProcessed', files.length);
-      pushLog('compress', `Compressed ${files.length} images (Saved ~${savedPercent}%)`);
+      pushLog('compress', `Compressed ${files.length} images (Saved ~${savedPercent}%)`, { originalSize: oSize, newSize: nSize, toolUsed: 'Compressor' });
     },
-    trackConvert: (files, targetFormat) => {
+    trackConvert: (files, targetFormat, oSize, nSize) => {
       incrementStat('imagesConverted', files.length);
       incrementStat('totalFilesProcessed', files.length);
-      pushLog('convert', `Converted ${files.length} images to ${targetFormat.toUpperCase()}`);
+      pushLog('convert', `Converted ${files.length} images to ${targetFormat.toUpperCase()}`, { originalSize: oSize, newSize: nSize, toolUsed: 'Format Converter' });
     }
   };
 
@@ -1326,6 +1337,14 @@
     renderActivityLog(data);
   }
 
+  function formatSize(bytes) {
+    if (!bytes || bytes === 0) return '—';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
   function renderActivityLog(data) {
     const tbody = $('#admin-log-body');
     if (!tbody) return;
@@ -1338,7 +1357,7 @@
     }
 
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="5">No global activity recorded yet</td></tr>';
+      tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="8">No global activity recorded yet</td></tr>';
       return;
     }
 
@@ -1352,10 +1371,13 @@
       if (log.action === 'convert') { badgeClass = 'badge-coral'; actionName = 'Convert'; }
       if (log.action === 'admin') { badgeClass = 'badge-green'; actionName = 'Admin Login'; }
 
-      // Device icons (simulated)
       let osIcon = '💻';
       if (log.os === 'iOS' || log.os === 'Android') osIcon = '📱';
       
+      const oSize = formatSize(log.originalSize);
+      const nSize = formatSize(log.newSize);
+      const tool = log.toolUsed || '—';
+
       return `
         <tr>
           <td><span class="log-time">${timeStr}</span></td>
@@ -1363,6 +1385,9 @@
           <td>${log.browser || 'Unknown'}</td>
           <td><span class="log-badge ${badgeClass}">${actionName}</span></td>
           <td><div class="log-details">${log.details}</div></td>
+          <td style="color:var(--text-secondary)">${oSize}</td>
+          <td style="color:var(--color-accent-green); font-weight:500;">${nSize}</td>
+          <td><span class="log-badge badge-blue">${tool}</span></td>
         </tr>
       `;
     }).join('');
@@ -1462,6 +1487,17 @@
 
     const adminClose = $('#admin-close');
     if (adminClose) adminClose.addEventListener('click', hideAdmin);
+
+    // Refresh Button
+    const adminRefresh = $('#admin-refresh-data');
+    if (adminRefresh) {
+      adminRefresh.addEventListener('click', async () => {
+        const svg = adminRefresh.querySelector('svg');
+        if (svg) svg.style.animation = 'spin 1s linear infinite';
+        await refreshDashboard();
+        if (svg) svg.style.animation = '';
+      });
+    }
 
     // Filter Buttons
     $$('.admin-filter').forEach(btn => {

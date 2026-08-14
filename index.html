@@ -342,6 +342,10 @@
           <span class="admin-badge-live">Owner</span>
         </div>
         <div class="admin-header-right">
+          <button class="btn btn-ghost admin-refresh-btn" id="admin-refresh-data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 3.43-8.86L2 10"/></svg>
+            <span>Refresh</span>
+          </button>
           <button class="btn btn-ghost admin-clear-btn" id="admin-clear-data">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             <span>Clear Data</span>
@@ -435,10 +439,13 @@
                 <th>Browser</th>
                 <th>Action</th>
                 <th>Details</th>
+                <th>Original Size</th>
+                <th>New Size</th>
+                <th>Tools Used</th>
               </tr>
             </thead>
             <tbody id="admin-log-body">
-              <tr class="admin-log-empty"><td colspan="5">No global activity recorded yet</td></tr>
+              <tr class="admin-log-empty"><td colspan="8">No global activity recorded yet</td></tr>
             </tbody>
           </table>
         </div>
@@ -462,7 +469,7 @@
               </tr>
             </thead>
             <tbody id="admin-files-body">
-              <tr class="admin-log-empty"><td colspan="5">No files processed yet</td></tr>
+              <tr class="admin-log-empty"><td colspan="8">No files processed yet</td></tr>
             </tbody>
           </table>
         </div>
