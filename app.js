@@ -1523,8 +1523,65 @@
       adminRefresh.addEventListener('click', async () => {
         const svg = adminRefresh.querySelector('svg');
         if (svg) svg.style.animation = 'spin 1s linear infinite';
-        await refreshDashboard();
+        // Force UI update
+        updateDashboardUI();
+        // Keep spinner spinning for half a second for UX feedback
+        await new Promise(r => setTimeout(r, 500));
         if (svg) svg.style.animation = '';
+      });
+    }
+
+    // Export Data
+    const adminExport = $('#admin-export-data');
+    if (adminExport) {
+      adminExport.addEventListener('click', () => {
+        if (cachedData.activityLog.length === 0) return showToast('⚠️ No data to export');
+        
+        let csv = 'Time,OS,Browser,Action,Details,OriginalSize,NewSize,Tool\\n';
+        cachedData.activityLog.forEach(log => {
+          const t = new Date(log.timestamp ? log.timestamp.toMillis() : Date.now()).toLocaleString().replace(/,/g, '');
+          const action = log.action || '';
+          const details = (log.details || '').replace(/"/g, '""');
+          csv += `"${t}","${log.os||''}","${log.browser||''}","${action}","${details}","${log.originalSize||0}","${log.newSize||0}","${log.toolUsed||''}"\\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pixel_forge_global_log_${Date.now()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // Clear Data
+    const adminClear = $('#admin-clear-data');
+    if (adminClear) {
+      adminClear.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to clear ALL global logs and stats? This cannot be undone!')) return;
+        if (!db) return;
+        try {
+          const svg = adminClear.querySelector('svg');
+          if (svg) svg.style.animation = 'spin 1s linear infinite';
+          
+          await db.collection('stats').doc('global').set({
+            visits: 0, pdfsGenerated: 0, imagesCompressed: 0, imagesConverted: 0, totalFilesProcessed: 0
+          });
+          
+          const snap = await db.collection('logs').get();
+          const batch = db.batch();
+          snap.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          
+          if (svg) svg.style.animation = '';
+          showToast('✅ Global Database Cleared');
+        } catch (e) {
+          console.error(e);
+          showToast('❌ Error clearing DB: ' + e.message);
+          const svg = adminClear.querySelector('svg');
+          if (svg) svg.style.animation = '';
+        }
       });
     }
 
