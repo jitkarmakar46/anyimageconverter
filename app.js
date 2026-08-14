@@ -776,6 +776,7 @@
       pdf.save(outName);
       showProgress(false);
       showToast(`✅ PDF created with ${files.length} page${files.length > 1 ? 's' : ''}!`);
+      if (window.PFAdmin) window.PFAdmin.trackPDF(files);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error generating PDF: ' + err.message);
@@ -859,6 +860,7 @@
       showProgress(false);
       const savedPercent = Math.round((1 - totalCompressed / totalOriginal) * 100);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} compressed! Saved ${savedPercent}% size`);
+      if (window.PFAdmin) window.PFAdmin.trackCompress(files, savedPercent);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error compressing: ' + err.message);
@@ -969,6 +971,7 @@
 
       showProgress(false);
       showToast(`✅ ${files.length} image${files.length > 1 ? 's' : ''} converted to ${targetFormat.toUpperCase()}`);
+      if (window.PFAdmin) window.PFAdmin.trackConvert(files, targetFormat);
     } catch (err) {
       showProgress(false);
       showToast('❌ Error converting: ' + err.message);
@@ -1140,3 +1143,336 @@
     init();
   }
 })();
+
+  /* =============================================
+     PixelForge — Admin Panel (Global Tracking)
+     Access: Ctrl+Shift+A or URL #admin
+  ============================================= */
+  
+
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+
+  // ─── Firebase Initialization ───
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-LoafDXPUWJdE0cTxxlr1_lo3OMy05pQ",
+    authDomain: "anyimageconverter-6f18b.firebaseapp.com",
+    projectId: "anyimageconverter-6f18b",
+    storageBucket: "anyimageconverter-6f18b.firebasestorage.app",
+    messagingSenderId: "697621272556",
+    appId: "1:697621272556:web:896904baa0c2aa31f212c9",
+    measurementId: "G-3647HTVH6V"
+  };
+
+  let db = null;
+  if (typeof firebase !== 'undefined') {
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      console.log("Firebase initialized for Universal Tracking.");
+    } catch (e) {
+      console.error("Firebase init failed:", e);
+    }
+  }
+
+  // ─── Universal Device Parser ───
+  function getDeviceMetadata() {
+    const ua = navigator.userAgent;
+    let os = 'Unknown OS';
+    let browser = 'Unknown Browser';
+    let type = 'Desktop';
+
+    // Detect OS
+    if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Mac OS X/i.test(ua)) {
+      if (/iPhone|iPad|iPod/i.test(ua)) { os = 'iOS'; type = 'Mobile'; }
+      else os = 'macOS';
+    }
+    else if (/Android/i.test(ua)) { os = 'Android'; type = 'Mobile'; }
+    else if (/Linux/i.test(ua)) os = 'Linux';
+
+    // Detect Browser
+    if (/Chrome|CriOS/i.test(ua) && !/Edg|OPR|SamsungBrowser/i.test(ua)) browser = 'Chrome';
+    else if (/Safari/i.test(ua) && !/Chrome|CriOS/i.test(ua)) browser = 'Safari';
+    else if (/Firefox|FxiOS/i.test(ua)) browser = 'Firefox';
+    else if (/Edg/i.test(ua)) browser = 'Edge';
+    else if (/OPR|Opera/i.test(ua)) browser = 'Opera';
+    else if (/SamsungBrowser/i.test(ua)) browser = 'Samsung Internet';
+    
+    return { os, browser, type };
+  }
+
+  // ─── Cloud Tracking Logic ───
+  async function incrementStat(field, amount = 1) {
+    if (!db) return;
+    try {
+      const docRef = db.collection('stats').doc('global');
+      await docRef.set({
+        [field]: firebase.firestore.FieldValue.increment(amount)
+      }, { merge: true });
+    } catch (e) {
+      console.error("Stat update failed:", e);
+    }
+  }
+
+  async function pushLog(action, details) {
+    if (!db) return;
+    try {
+      const device = getDeviceMetadata();
+      await db.collection('logs').add({
+        action,
+        details,
+        os: device.os,
+        browser: device.browser,
+        type: device.type,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Log push failed:", e);
+    }
+  }
+
+  window.PFAdmin = {
+    trackVisit: () => {
+      incrementStat('visits');
+      pushLog('visit', 'Page loaded');
+    },
+    trackPDF: (files) => {
+      incrementStat('pdfsGenerated');
+      incrementStat('totalFilesProcessed', files.length);
+      pushLog('pdf', `Generated PDF from ${files.length} images`);
+    },
+    trackCompress: (files, savedPercent) => {
+      incrementStat('imagesCompressed', files.length);
+      incrementStat('totalFilesProcessed', files.length);
+      pushLog('compress', `Compressed ${files.length} images (Saved ~${savedPercent}%)`);
+    },
+    trackConvert: (files, targetFormat) => {
+      incrementStat('imagesConverted', files.length);
+      incrementStat('totalFilesProcessed', files.length);
+      pushLog('convert', `Converted ${files.length} images to ${targetFormat.toUpperCase()}`);
+    }
+  };
+
+  // ─── ADMIN UI LOGIC ───
+  let cachedData = {
+    visits: 0, pdfsGenerated: 0, imagesCompressed: 0, imagesConverted: 0, totalFilesProcessed: 0, activityLog: []
+  };
+  let adminUnlocked = false;
+
+  const formatTime = (ts) => {
+    if (!ts) return 'Just now';
+    if (ts.toDate) ts = ts.toDate();
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+    if (diff < 172800000) return 'Yesterday';
+    return d.toLocaleDateString();
+  };
+
+  async function refreshDashboard() {
+    if (!adminUnlocked || !db) return;
+
+    try {
+      const doc = await db.collection('stats').doc('global').get();
+      if (doc.exists) {
+        const stats = doc.data();
+        cachedData.visits = stats.visits || 0;
+        cachedData.pdfsGenerated = stats.pdfsGenerated || 0;
+        cachedData.imagesCompressed = stats.imagesCompressed || 0;
+        cachedData.imagesConverted = stats.imagesConverted || 0;
+        cachedData.totalFilesProcessed = stats.totalFilesProcessed || 0;
+      }
+
+      const logsQuery = await db.collection('logs').orderBy('timestamp', 'desc').limit(100).get();
+      cachedData.activityLog = [];
+      logsQuery.forEach(doc => cachedData.activityLog.push(doc.data()));
+    } catch (e) {
+      console.error('Error fetching admin data:', e);
+      // Fallback for UI if DB fetch fails
+      const fileBody = $('#admin-log-body');
+      if (fileBody) fileBody.innerHTML = `<tr class="admin-log-empty"><td colspan="5" style="color:var(--color-accent-coral)">Database Error: ${e.message}</td></tr>`;
+      return; 
+    }
+
+    const data = cachedData;
+    const statVisits = $('#stat-visits');
+    const statPdfs = $('#stat-pdfs');
+    const statCompressed = $('#stat-compressed');
+    const statConverted = $('#stat-converted');
+    const statTotalFiles = $('#stat-total-files');
+    const statLastActive = $('#stat-last-active');
+
+    if (statVisits) statVisits.textContent = data.visits.toLocaleString();
+    if (statPdfs) statPdfs.textContent = data.pdfsGenerated.toLocaleString();
+    if (statCompressed) statCompressed.textContent = data.imagesCompressed.toLocaleString();
+    if (statConverted) statConverted.textContent = data.imagesConverted.toLocaleString();
+    if (statTotalFiles) statTotalFiles.textContent = data.totalFilesProcessed.toLocaleString();
+
+    if (statLastActive) {
+      if (data.activityLog.length > 0 && data.activityLog[0].timestamp) {
+        statLastActive.textContent = formatTime(data.activityLog[0].timestamp);
+      } else {
+        statLastActive.textContent = '—';
+      }
+    }
+
+    renderActivityLog(data);
+  }
+
+  function renderActivityLog(data) {
+    const tbody = $('#admin-log-body');
+    if (!tbody) return;
+
+    const currentFilter = document.querySelector('.admin-filter.active')?.dataset.filter || 'all';
+    
+    let logs = data.activityLog;
+    if (currentFilter !== 'all') {
+      logs = logs.filter(log => log.action === currentFilter);
+    }
+
+    if (logs.length === 0) {
+      tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="5">No global activity recorded yet</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = logs.map(log => {
+      const timeStr = formatTime(log.timestamp);
+      
+      let badgeClass = 'badge-blue';
+      let actionName = 'Visit';
+      if (log.action === 'pdf') { badgeClass = 'badge-purple'; actionName = 'PDF'; }
+      if (log.action === 'compress') { badgeClass = 'badge-green'; actionName = 'Compress'; }
+      if (log.action === 'convert') { badgeClass = 'badge-coral'; actionName = 'Convert'; }
+
+      // Device icons (simulated)
+      let osIcon = '💻';
+      if (log.os === 'iOS' || log.os === 'Android') osIcon = '📱';
+      
+      return `
+        <tr>
+          <td><span class="log-time">${timeStr}</span></td>
+          <td><span style="font-weight:500; color:var(--text-primary)">${osIcon} ${log.os || 'Unknown'}</span></td>
+          <td>${log.browser || 'Unknown'}</td>
+          <td><span class="log-badge ${badgeClass}">${actionName}</span></td>
+          <td><div class="log-details">${log.details}</div></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function checkAdminPassword(e) {
+    e.preventDefault();
+    const input = $('#admin-password-input');
+    const err = $('#admin-login-error');
+    if (input.value === 'Jittus@123') {
+      input.value = '';
+      err.hidden = true;
+      $('#admin-login-overlay').hidden = true;
+      showAdmin();
+    } else {
+      err.hidden = false;
+      input.classList.add('shake');
+      setTimeout(() => input.classList.remove('shake'), 400);
+    }
+  }
+
+  function showAdmin() {
+    adminUnlocked = true;
+    const panel = $('#admin-panel');
+    if (panel) {
+      panel.hidden = false;
+      refreshDashboard();
+    }
+  }
+
+  function hideAdmin() {
+    const panel = $('#admin-panel');
+    if (panel) panel.hidden = true;
+    adminUnlocked = false;
+  }
+
+  function initAdmin() {
+    // Check hash on load
+    if (window.location.hash === '#admin') {
+      const overlay = $('#admin-login-overlay');
+      if (overlay) overlay.hidden = false;
+    }
+
+    // Keyboard shortcut (Ctrl+Shift+A)
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        if (adminUnlocked) {
+          hideAdmin();
+        } else {
+          const overlay = $('#admin-login-overlay');
+          if (overlay) {
+            overlay.hidden = !overlay.hidden;
+            if (!overlay.hidden) setTimeout(() => $('#admin-password-input')?.focus(), 100);
+          }
+        }
+      }
+      
+      // Escape to close
+      if (e.key === 'Escape') {
+        const overlay = $('#admin-login-overlay');
+        if (overlay && !overlay.hidden) {
+          overlay.hidden = true;
+        } else if (adminUnlocked) {
+          hideAdmin();
+        }
+      }
+    });
+
+    // Login Form
+    const form = $('#admin-login-form');
+    if (form) form.addEventListener('submit', checkAdminPassword);
+
+    // Password Toggle
+    const pwToggle = $('#admin-pw-toggle');
+    if (pwToggle) {
+      pwToggle.addEventListener('click', () => {
+        const input = $('#admin-password-input');
+        const openIcon = pwToggle.querySelector('.eye-open');
+        const closedIcon = pwToggle.querySelector('.eye-closed');
+        if (input.type === 'password') {
+          input.type = 'text';
+          openIcon.style.display = 'none';
+          closedIcon.style.display = 'block';
+        } else {
+          input.type = 'password';
+          openIcon.style.display = 'block';
+          closedIcon.style.display = 'none';
+        }
+      });
+    }
+
+    // Close Buttons
+    const loginClose = $('#admin-login-close');
+    if (loginClose) loginClose.addEventListener('click', () => $('#admin-login-overlay').hidden = true);
+
+    const adminClose = $('#admin-close');
+    if (adminClose) adminClose.addEventListener('click', hideAdmin);
+
+    // Filter Buttons
+    $$('.admin-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.admin-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderActivityLog(cachedData);
+      });
+    });
+
+    // Track Visit
+    if (window.PFAdmin) window.PFAdmin.trackVisit();
+  }
+
+  // Inject initAdmin into the main init flow
+  document.addEventListener('DOMContentLoaded', () => {
+    // Delay admin init slightly so main app loads fast
+    setTimeout(initAdmin, 500); 
+  });
