@@ -1287,31 +1287,52 @@
     return d.toLocaleDateString();
   };
 
-  async function refreshDashboard() {
-    if (!adminUnlocked || !db) return;
+  let statsUnsubscribe = null;
+  let logsUnsubscribe = null;
 
-    try {
-      const doc = await db.collection('stats').doc('global').get();
-      if (doc.exists) {
-        const stats = doc.data();
-        cachedData.visits = stats.visits || 0;
-        cachedData.pdfsGenerated = stats.pdfsGenerated || 0;
-        cachedData.imagesCompressed = stats.imagesCompressed || 0;
-        cachedData.imagesConverted = stats.imagesConverted || 0;
-        cachedData.totalFilesProcessed = stats.totalFilesProcessed || 0;
-      }
-
-      const logsQuery = await db.collection('logs').orderBy('timestamp', 'desc').limit(100).get();
-      cachedData.activityLog = [];
-      logsQuery.forEach(doc => cachedData.activityLog.push(doc.data()));
-    } catch (e) {
-      console.error('Error fetching admin data:', e);
-      // Fallback for UI if DB fetch fails
-      const fileBody = $('#admin-log-body');
-      if (fileBody) fileBody.innerHTML = `<tr class="admin-log-empty"><td colspan="5" style="color:var(--color-accent-coral)">Database Error: ${e.message}</td></tr>`;
-      return; 
+  function subscribeAdminData() {
+    if (!db) return;
+    
+    if (!statsUnsubscribe) {
+      statsUnsubscribe = db.collection('stats').doc('global').onSnapshot((doc) => {
+        if (doc.exists) {
+          const stats = doc.data();
+          cachedData.visits = stats.visits || 0;
+          cachedData.pdfsGenerated = stats.pdfsGenerated || 0;
+          cachedData.imagesCompressed = stats.imagesCompressed || 0;
+          cachedData.imagesConverted = stats.imagesConverted || 0;
+          cachedData.totalFilesProcessed = stats.totalFilesProcessed || 0;
+          updateDashboardUI();
+        }
+      }, (e) => console.error('Stats sync error:', e));
     }
 
+    if (!logsUnsubscribe) {
+      logsUnsubscribe = db.collection('logs').orderBy('timestamp', 'desc').limit(100).onSnapshot((snap) => {
+        cachedData.activityLog = [];
+        snap.forEach(doc => cachedData.activityLog.push(doc.data()));
+        updateDashboardUI();
+      }, (e) => {
+        console.error('Logs sync error:', e);
+        const fileBody = $('#admin-log-body');
+        if (fileBody) fileBody.innerHTML = `<tr class="admin-log-empty"><td colspan="8" style="color:var(--color-accent-coral)">Database Error: ${e.message}</td></tr>`;
+      });
+    }
+  }
+
+  function unsubscribeAdminData() {
+    if (statsUnsubscribe) { statsUnsubscribe(); statsUnsubscribe = null; }
+    if (logsUnsubscribe) { logsUnsubscribe(); logsUnsubscribe = null; }
+  }
+
+  async function refreshDashboard() {
+    if (!adminUnlocked) return;
+    // The refresh button can now just force a UI update since data is synced
+    updateDashboardUI();
+  }
+
+  function updateDashboardUI() {
+    if (!adminUnlocked) return;
     const data = cachedData;
     const statVisits = $('#stat-visits');
     const statPdfs = $('#stat-pdfs');
@@ -1393,11 +1414,17 @@
     }).join('');
   }
 
-  function checkAdminPassword(e) {
+  async function checkAdminPassword(e) {
     e.preventDefault();
     const input = $('#admin-password-input');
     const err = $('#admin-login-error');
-    if (input.value === 'Jittus@123') {
+    
+    const msgBuffer = new TextEncoder().encode(input.value);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (hashHex === 'd4c549ffcc8d4d8d36f5760290de6d98cc6acd7236a37990f010990a8b02bc73') {
       input.value = '';
       err.hidden = true;
       $('#admin-login-overlay').hidden = true;
@@ -1415,6 +1442,7 @@
     const panel = $('#admin-panel');
     if (panel) {
       panel.hidden = false;
+      subscribeAdminData();
       refreshDashboard();
     }
   }
@@ -1423,6 +1451,7 @@
     const panel = $('#admin-panel');
     if (panel) panel.hidden = true;
     adminUnlocked = false;
+    unsubscribeAdminData();
   }
 
   function initAdmin() {
