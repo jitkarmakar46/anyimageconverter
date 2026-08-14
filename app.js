@@ -804,7 +804,7 @@
     try {
       let totalOriginal = 0;
       let totalCompressed = 0;
-      let totalOriginal = 0; let totalConverted = 0; let zip = null;
+      let zip = null;
       if (files.length > 1 && window.JSZip) {
         zip = new JSZip();
       }
