@@ -1233,6 +1233,9 @@
   }
 
   window.PFAdmin = {
+    trackAdminLogin: () => {
+      pushLog('admin', 'Admin Panel Unlocked');
+    },
     trackVisit: () => {
       incrementStat('visits');
       pushLog('visit', 'Page loaded');
@@ -1347,6 +1350,7 @@
       if (log.action === 'pdf') { badgeClass = 'badge-purple'; actionName = 'PDF'; }
       if (log.action === 'compress') { badgeClass = 'badge-green'; actionName = 'Compress'; }
       if (log.action === 'convert') { badgeClass = 'badge-coral'; actionName = 'Convert'; }
+      if (log.action === 'admin') { badgeClass = 'badge-green'; actionName = 'Admin Login'; }
 
       // Device icons (simulated)
       let osIcon = '💻';
@@ -1373,6 +1377,7 @@
       err.hidden = true;
       $('#admin-login-overlay').hidden = true;
       showAdmin();
+      if (window.PFAdmin) window.PFAdmin.trackAdminLogin();
     } else {
       err.hidden = false;
       input.classList.add('shake');
