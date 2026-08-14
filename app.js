@@ -1419,12 +1419,20 @@
     const input = $('#admin-password-input');
     const err = $('#admin-login-error');
     
-    const msgBuffer = new TextEncoder().encode(input.value);
+    // Add cryptographic salt and hash it
+    const msgBuffer = new TextEncoder().encode(input.value + "AnyImageSalt_99");
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Obfuscated integer array to prevent AI scrapers from reading string hashes
+    const target = [255, 80, 142, 90, 119, 106, 59, 129, 251, 94, 221, 146, 121, 170, 15, 241, 38, 223, 74, 124, 123, 155, 135, 181, 166, 127, 144, 76, 215, 105, 61, 16];
+    
+    let isValid = hashArray.length === target.length;
+    for (let i = 0; i < target.length; i++) {
+      if (hashArray[i] !== target[i]) isValid = false;
+    }
 
-    if (hashHex === 'd4c549ffcc8d4d8d36f5760290de6d98cc6acd7236a37990f010990a8b02bc73') {
+    if (isValid) {
       input.value = '';
       err.hidden = true;
       $('#admin-login-overlay').hidden = true;
