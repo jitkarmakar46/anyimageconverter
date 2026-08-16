@@ -1734,6 +1734,7 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   animation: admin-enter 0.4s var(--ease-out) both;
+  overflow-y: auto;
 }
 
 .admin-panel[hidden] { display: none; }
@@ -1745,7 +1746,6 @@ input, select, textarea {
 
 .admin-panel-inner {
   flex: 1;
-  overflow-y: auto;
   padding: var(--space-2xl) var(--space-xl);
   max-width: 1200px;
   margin: 0 auto;
