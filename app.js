@@ -1436,6 +1436,7 @@
       input.value = '';
       err.hidden = true;
       $('#admin-login-overlay').hidden = true;
+      document.body.style.overflow = '';
       showAdmin();
       if (window.PFAdmin) window.PFAdmin.trackAdminLogin();
     } else {
@@ -1450,6 +1451,7 @@
     const panel = $('#admin-panel');
     if (panel) {
       panel.hidden = false;
+      document.body.style.overflow = 'hidden'; // Lock background scroll
       subscribeAdminData();
       refreshDashboard();
     }
@@ -1457,7 +1459,10 @@
 
   function hideAdmin() {
     const panel = $('#admin-panel');
-    if (panel) panel.hidden = true;
+    if (panel) {
+      panel.hidden = true;
+      document.body.style.overflow = ''; // Restore background scroll
+    }
     adminUnlocked = false;
     unsubscribeAdminData();
   }
@@ -1466,7 +1471,10 @@
     // Check hash on load
     if (window.location.hash === '#admin') {
       const overlay = $('#admin-login-overlay');
-      if (overlay) overlay.hidden = false;
+      if (overlay) {
+        overlay.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
     }
 
     // Keyboard shortcut (Ctrl+Shift+A)
