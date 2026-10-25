@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /99x7q
+Disallow: /99x7q.html
 
-Sitemap: /sitemap.xml
+Sitemap: https://anyimageconverter.vercel.app/sitemap.xml

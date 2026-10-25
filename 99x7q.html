@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <title>Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css?v=2.0">
+  <!-- Firebase App & Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    (function() {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface-bg, #0f1117);
+      color: var(--text-primary, #ffffff);
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .auth-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .admin-standalone {
+      display: none;
+      width: 100%;
+      min-height: 100vh;
+      padding: 32px 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    .admin-standalone.active {
+      display: block;
+    }
+    .admin-standalone .admin-header {
+      border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+      padding-bottom: 20px;
+      margin-bottom: 32px;
+    }
+    .btn-logout {
+      background: rgba(255, 82, 82, 0.12);
+      color: #ff5252;
+      border: 1px solid rgba(255, 82, 82, 0.25);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-logout:hover {
+      background: rgba(255, 82, 82, 0.22);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Gate / Login Section -->
+  <div class="auth-wrapper" id="auth-section">
+    <div class="admin-login-card" style="position: relative; margin: 0 auto;">
+      <div class="admin-login-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 class="admin-login-title">Admin Access</h2>
+      <p class="admin-login-subtitle">Enter your secret password to view live metrics</p>
+      <form id="admin-login-form" autocomplete="off">
+        <div class="admin-input-wrap">
+          <input type="password" id="admin-password-input" class="admin-input" placeholder="Password" autocomplete="new-password" required autofocus>
+          <button type="button" class="admin-input-toggle" id="admin-pw-toggle" aria-label="Show password">
+            <svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <p class="admin-login-error" id="admin-login-error" hidden>Incorrect password</p>
+        <button type="submit" class="btn btn-primary btn-full admin-login-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Unlock Dashboard</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Full Standalone Dashboard Section -->
+  <main class="admin-standalone" id="dashboard-section">
+    <!-- Admin Header -->
+    <div class="admin-header">
+      <div class="admin-header-left">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <h1 class="admin-title">Admin Dashboard</h1>
+        <span class="admin-badge-live">Live</span>
+      </div>
+      <div class="admin-header-right">
+        <button class="btn btn-ghost admin-refresh-btn" id="admin-refresh-data" title="Refresh metrics">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 3.43-8.86L2 10"/></svg>
+          <span>Refresh</span>
+        </button>
+        <button class="btn btn-ghost admin-clear-btn" id="admin-clear-data" title="Clear all metrics">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Clear Data</span>
+        </button>
+        <button class="btn btn-ghost admin-export-btn" id="admin-export-data" title="Export CSV report">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export CSV</span>
+        </button>
+        <button class="btn-logout" id="admin-logout-btn" title="Lock Dashboard">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Lock</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="admin-stats-grid">
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #3186FF">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-visits">0</span>
+          <span class="admin-stat-label">Page Visits</span>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #7B61FF">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-pdfs">0</span>
+          <span class="admin-stat-label">PDFs Generated</span>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #00B95C">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-compressed">0</span>
+          <span class="admin-stat-label">Images Compressed</span>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #FF6B6B">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-converted">0</span>
+          <span class="admin-stat-label">Format Conversions</span>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #FBBC04">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-total-files">0</span>
+          <span class="admin-stat-label">Total Files Processed</span>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="--stat-color: #E91E8C">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="admin-stat-info">
+          <span class="admin-stat-value" id="stat-last-active">—</span>
+          <span class="admin-stat-label">Last Activity</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Log Section -->
+    <div class="admin-section" style="margin-top: 32px;">
+      <div class="admin-section-header">
+        <h2 class="admin-section-title">Global Activity Log</h2>
+        <div class="admin-filters">
+          <button class="admin-filter active" data-filter="all">All</button>
+          <button class="admin-filter" data-filter="pdf">PDF</button>
+          <button class="admin-filter" data-filter="compress">Compress</button>
+          <button class="admin-filter" data-filter="convert">Convert</button>
+          <button class="admin-filter" data-filter="visit">Visits</button>
+        </div>
+      </div>
+      <div class="admin-log-table-wrap">
+        <table class="admin-log-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Device OS</th>
+              <th>Browser</th>
+              <th>Action</th>
+              <th>Details</th>
+              <th>Original Size</th>
+              <th>New Size</th>
+              <th>Tools Used</th>
+            </tr>
+          </thead>
+          <tbody id="admin-log-body">
+            <tr class="admin-log-empty"><td colspan="8">No global activity recorded yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    // ─── Firebase Initialization ───
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-LoafDXPUWJdE0cTxxlr1_lo3OMy05pQ",
+      authDomain: "anyimageconverter-6f18b.firebaseapp.com",
+      projectId: "anyimageconverter-6f18b",
+      storageBucket: "anyimageconverter-6f18b.firebasestorage.app",
+      messagingSenderId: "697621272556",
+      appId: "1:697621272556:web:896904baa0c2aa31f212c9",
+      measurementId: "G-3647HTVH6V"
+    };
+
+    let db = null;
+    if (typeof firebase !== 'undefined') {
+      try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+      } catch (e) {
+        console.error("Firebase init error:", e);
+      }
+    }
+
+    // ─── Admin Dashboard State ───
+    let cachedData = {
+      visits: 0, pdfsGenerated: 0, imagesCompressed: 0, imagesConverted: 0, totalFilesProcessed: 0, activityLog: []
+    };
+    let statsUnsubscribe = null;
+    let logsUnsubscribe = null;
+
+    const formatTime = (ts) => {
+      if (!ts) return 'Just now';
+      if (ts.toDate) ts = ts.toDate();
+      const d = new Date(ts);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+      if (diff < 172800000) return 'Yesterday';
+      return d.toLocaleDateString();
+    };
+
+    function formatSize(bytes) {
+      if (!bytes || bytes === 0) return '—';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    let toastTimeoutId = null;
+    function showToast(message, duration = 3500) {
+      let overlay = $('.toast-overlay');
+      let toast = $('.toast');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'toast-overlay';
+        toast = document.createElement('div');
+        toast.className = 'toast';
+        overlay.appendChild(toast);
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', () => {
+          overlay.classList.remove('visible');
+          toast.classList.remove('visible');
+        });
+      }
+      if (toastTimeoutId) clearTimeout(toastTimeoutId);
+      toast.textContent = message;
+      overlay.classList.remove('visible');
+      toast.classList.remove('visible');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          overlay.classList.add('visible');
+          toast.classList.add('visible');
+        });
+      });
+      if (duration > 0) {
+        toastTimeoutId = setTimeout(() => {
+          overlay.classList.remove('visible');
+          toast.classList.remove('visible');
+        }, duration);
+      }
+    }
+
+    function subscribeAdminData() {
+      if (!db) return;
+      if (!statsUnsubscribe) {
+        statsUnsubscribe = db.collection('stats').doc('global').onSnapshot((doc) => {
+          if (doc.exists) {
+            const stats = doc.data();
+            cachedData.visits = stats.visits || 0;
+            cachedData.pdfsGenerated = stats.pdfsGenerated || 0;
+            cachedData.imagesCompressed = stats.imagesCompressed || 0;
+            cachedData.imagesConverted = stats.imagesConverted || 0;
+            cachedData.totalFilesProcessed = stats.totalFilesProcessed || 0;
+            updateDashboardUI();
+          }
+        }, (e) => console.error('Stats sync error:', e));
+      }
+
+      if (!logsUnsubscribe) {
+        logsUnsubscribe = db.collection('logs').orderBy('timestamp', 'desc').limit(100).onSnapshot((snap) => {
+          cachedData.activityLog = [];
+          snap.forEach(doc => cachedData.activityLog.push(doc.data()));
+          updateDashboardUI();
+        }, (e) => {
+          console.error('Logs sync error:', e);
+          const fileBody = $('#admin-log-body');
+          if (fileBody) fileBody.innerHTML = `<tr class="admin-log-empty"><td colspan="8" style="color:var(--color-accent-coral)">Database Error: ${e.message}</td></tr>`;
+        });
+      }
+    }
+
+    function unsubscribeAdminData() {
+      if (statsUnsubscribe) { statsUnsubscribe(); statsUnsubscribe = null; }
+      if (logsUnsubscribe) { logsUnsubscribe(); logsUnsubscribe = null; }
+    }
+
+    function updateDashboardUI() {
+      const data = cachedData;
+      const statVisits = $('#stat-visits');
+      const statPdfs = $('#stat-pdfs');
+      const statCompressed = $('#stat-compressed');
+      const statConverted = $('#stat-converted');
+      const statTotalFiles = $('#stat-total-files');
+      const statLastActive = $('#stat-last-active');
+
+      if (statVisits) statVisits.textContent = data.visits.toLocaleString();
+      if (statPdfs) statPdfs.textContent = data.pdfsGenerated.toLocaleString();
+      if (statCompressed) statCompressed.textContent = data.imagesCompressed.toLocaleString();
+      if (statConverted) statConverted.textContent = data.imagesConverted.toLocaleString();
+      if (statTotalFiles) statTotalFiles.textContent = data.totalFilesProcessed.toLocaleString();
+
+      if (statLastActive) {
+        if (data.activityLog.length > 0 && data.activityLog[0].timestamp) {
+          statLastActive.textContent = formatTime(data.activityLog[0].timestamp);
+        } else {
+          statLastActive.textContent = '—';
+        }
+      }
+
+      renderActivityLog(data);
+    }
+
+    function renderActivityLog(data) {
+      const tbody = $('#admin-log-body');
+      if (!tbody) return;
+
+      const currentFilter = document.querySelector('.admin-filter.active')?.dataset.filter || 'all';
+      let logs = data.activityLog;
+      if (currentFilter !== 'all') {
+        logs = logs.filter(log => log.action === currentFilter);
+      }
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr class="admin-log-empty"><td colspan="8">No global activity recorded yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(log => {
+        const timeStr = formatTime(log.timestamp);
+        let badgeClass = 'badge-blue';
+        let actionName = 'Visit';
+        if (log.action === 'pdf') { badgeClass = 'badge-purple'; actionName = 'PDF'; }
+        if (log.action === 'compress') { badgeClass = 'badge-green'; actionName = 'Compress'; }
+        if (log.action === 'convert') { badgeClass = 'badge-coral'; actionName = 'Convert'; }
+        if (log.action === 'admin') { badgeClass = 'badge-green'; actionName = 'Admin Login'; }
+
+        let osIcon = '💻';
+        if (log.os === 'iOS' || log.os === 'Android') osIcon = '📱';
+
+        const oSize = formatSize(log.originalSize);
+        const nSize = formatSize(log.newSize);
+        const tool = log.toolUsed || '—';
+
+        return `
+          <tr>
+            <td><span class="log-time">${timeStr}</span></td>
+            <td><span style="font-weight:500; color:var(--text-primary)">${osIcon} ${log.os || 'Unknown'}</span></td>
+            <td>${log.browser || 'Unknown'}</td>
+            <td><span class="log-badge ${badgeClass}">${actionName}</span></td>
+            <td><div class="log-details">${log.details || '—'}</div></td>
+            <td style="color:var(--text-secondary)">${oSize}</td>
+            <td style="color:var(--color-accent-green); font-weight:500;">${nSize}</td>
+            <td><span class="log-badge badge-blue">${tool}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ─── Authentication Gate ───
+    async function checkAdminPassword(e) {
+      if (e) e.preventDefault();
+      const input = $('#admin-password-input');
+      const err = $('#admin-login-error');
+
+      const msgBuffer = new TextEncoder().encode(input.value + "AnyImageSalt_99");
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const target = [255, 80, 142, 90, 119, 106, 59, 129, 251, 94, 221, 146, 121, 170, 15, 241, 38, 223, 74, 124, 123, 155, 135, 181, 166, 127, 144, 76, 215, 105, 61, 16];
+
+      let isValid = hashArray.length === target.length;
+      for (let i = 0; i < target.length; i++) {
+        if (hashArray[i] !== target[i]) isValid = false;
+      }
+
+      if (isValid) {
+        input.value = '';
+        err.hidden = true;
+        sessionStorage.setItem('aic_admin_auth', 'true');
+        unlockDashboard();
+      } else {
+        err.hidden = false;
+        input.classList.add('shake');
+        setTimeout(() => input.classList.remove('shake'), 400);
+      }
+    }
+
+    function unlockDashboard() {
+      $('#auth-section').style.display = 'none';
+      $('#dashboard-section').classList.add('active');
+      subscribeAdminData();
+      updateDashboardUI();
+    }
+
+    function lockDashboard() {
+      sessionStorage.removeItem('aic_admin_auth');
+      unsubscribeAdminData();
+      $('#dashboard-section').classList.remove('active');
+      $('#auth-section').style.display = 'flex';
+      $('#admin-password-input').focus();
+    }
+
+    // ─── Event Bindings ───
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check session
+      if (sessionStorage.getItem('aic_admin_auth') === 'true') {
+        unlockDashboard();
+      }
+
+      // Password Form
+      const form = $('#admin-login-form');
+      if (form) form.addEventListener('submit', checkAdminPassword);
+
+      // Password Toggle
+      const pwToggle = $('#admin-pw-toggle');
+      if (pwToggle) {
+        pwToggle.addEventListener('click', () => {
+          const input = $('#admin-password-input');
+          const openIcon = pwToggle.querySelector('.eye-open');
+          const closedIcon = pwToggle.querySelector('.eye-closed');
+          if (input.type === 'password') {
+            input.type = 'text';
+            openIcon.style.display = 'none';
+            closedIcon.style.display = 'block';
+          } else {
+            input.type = 'password';
+            openIcon.style.display = 'block';
+            closedIcon.style.display = 'none';
+          }
+        });
+      }
+
+      // Logout / Lock
+      const logoutBtn = $('#admin-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', lockDashboard);
+
+      // Refresh Button
+      const adminRefresh = $('#admin-refresh-data');
+      if (adminRefresh) {
+        adminRefresh.addEventListener('click', async () => {
+          const svg = adminRefresh.querySelector('svg');
+          if (svg) svg.style.animation = 'spin 1s linear infinite';
+          updateDashboardUI();
+          await new Promise(r => setTimeout(r, 500));
+          if (svg) svg.style.animation = '';
+        });
+      }
+
+      // Export CSV
+      const adminExport = $('#admin-export-data');
+      if (adminExport) {
+        adminExport.addEventListener('click', () => {
+          if (cachedData.activityLog.length === 0) return showToast('⚠️ No data to export');
+          let csv = 'Time,OS,Browser,Action,Details,OriginalSize,NewSize,Tool\n';
+          cachedData.activityLog.forEach(log => {
+            const t = new Date(log.timestamp ? log.timestamp.toMillis() : Date.now()).toLocaleString().replace(/,/g, '');
+            const action = log.action || '';
+            const details = (log.details || '').replace(/"/g, '""');
+            csv += `"${t}","${log.os||''}","${log.browser||''}","${action}","${details}","${log.originalSize||0}","${log.newSize||0}","${log.toolUsed||''}"\n`;
+          });
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `anyimageconverter_global_log_${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+
+      // Clear Data
+      const adminClear = $('#admin-clear-data');
+      if (adminClear) {
+        adminClear.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to clear ALL global logs and stats? This cannot be undone!')) return;
+          if (!db) return;
+          try {
+            const svg = adminClear.querySelector('svg');
+            if (svg) svg.style.animation = 'spin 1s linear infinite';
+            await db.collection('stats').doc('global').set({
+              visits: 0, pdfsGenerated: 0, imagesCompressed: 0, imagesConverted: 0, totalFilesProcessed: 0
+            });
+            const snap = await db.collection('logs').get();
+            const batch = db.batch();
+            snap.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            if (svg) svg.style.animation = '';
+            showToast('✅ Global Database Cleared');
+          } catch (e) {
+            console.error(e);
+            showToast('❌ Error clearing DB: ' + e.message);
+            const svg = adminClear.querySelector('svg');
+            if (svg) svg.style.animation = '';
+          }
+        });
+      }
+
+      // Filter Buttons
+      $$('.admin-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+          $$('.admin-filter').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderActivityLog(cachedData);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
